@@ -5,6 +5,7 @@ import requests
 from frappe.utils import add_to_date, flt, get_datetime, get_fullname
 
 from hms_tz.nhif.doctype.nhif_response_log.nhif_response_log import add_log
+from hms_tz.signature_registry import resolve
 
 
 @frappe.whitelist()
@@ -40,7 +41,8 @@ def sign_folio(
     }
 
     if signature_method == "signature":
-        payload["SignatureData"] = signature.replace("data:image/png;base64,", "")
+        # base64 straight from the pad, but resolve() in case a caller passes a stored pointer
+        payload["SignatureData"] = resolve(signature).replace("data:image/png;base64,", "")
         payload["SignatureMethod"] = "SIGNATURE"
         payload["FpCode"] = "SIGNATURE"
     else:
@@ -249,7 +251,9 @@ def get_payload(doc):
     Signatures = [{
         "Signatory": "PATIENT",
         "SignatoryID": doc.cardno.strip(),
-        "SignatureData": doc.patient_signature, #str(doc.patient_signature).replace("data:image/png;base64,", ""),
+        # resolve per-read, not hydrate(doc): get_payload runs in before_submit, so mutating
+        # the doc would persist base64 back into the column
+        "SignatureData": resolve(doc.patient_signature), #str(doc.patient_signature).replace("data:image/png;base64,", ""),
         "DateCreated": date_created,
         "CreatedBy": doc.item_crt_by,
         "LastModified": date_modified,
@@ -265,7 +269,8 @@ def get_payload(doc):
             Signatures.append({
                 "Signatory": "MCT",
                 "SignatoryID": d.mct_code,
-                "SignatureData": signature, #str(signature).replace("data:image/png;base64,", ""),
+                # read off the master, so hydrate(doc) above does not cover it
+                "SignatureData": resolve(signature),
                 "DateCreated": date_created,
                 "CreatedBy": doc.item_crt_by,
                 "LastModified": date_modified,

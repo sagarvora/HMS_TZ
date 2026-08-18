@@ -134,6 +134,15 @@ after_migrate = [
 # Hook on document methods and events
 
 doc_events = {
+    # Signature fields are stored in a content-addressed registry rather than inline as
+    # base64. Registered against every doctype because Signature fields arrive via custom
+    # fields too; the handlers no-op unless the doctype belongs to hms_tz.
+    # See hms_tz/signature_registry.py.
+    "*": {
+        "validate": "hms_tz.signature_registry.dehydrate",
+        "onload": "hms_tz.signature_registry.hydrate",
+        "before_print": "hms_tz.signature_registry.hydrate",
+    },
     "Patient Appointment": {
         "before_insert": "hms_tz.nhif.api.patient_appointment.before_insert",
         "validate": "hms_tz.nhif.api.patient_appointment.make_next_doc",
@@ -305,6 +314,9 @@ scheduler_events = {
 jinja = {
     "methods": [
         "hms_tz.nhif.api.healthcare_utils.get_item_rate",
+        # print formats that read a signature off a master record cannot be reached by the
+        # before_print hook, so they resolve the pointer themselves
+        "hms_tz.signature_registry.resolve",
     ]
 }
 
